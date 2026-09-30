@@ -1,0 +1,15 @@
+{
+  "name": "LA-Punkte · LK Sport",
+  "short_name": "LA-Punkte",
+  "description": "Leichtathletik-Leistungen nach EPA in Punkte und Notenpunkte umrechnen",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1b2d",
+  "theme_color": "#0f1b2d",
+  "lang": "de",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}

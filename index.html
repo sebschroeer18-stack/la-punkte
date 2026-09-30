@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LA-Punkte</title>
+<meta name="theme-color" content="#0f1b2d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LA-Punkte">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+/* Layout: Anzeigetafel-Logik – dunkler Kopf wie eine Zeitnahme-Tafel, darunter helle Ergebnismatrix, Navigation unten. */
+:root{
+  --bg:#eef1f5; --surface:#ffffff; --ink:#0f1b2d; --muted:#5b6b80; --line:#d9e0e8;
+  --board:#0f1b2d; --board-ink:#f4f7fb; --signal:#f5c400; --lane:#2356a8; --lane-soft:#e3ebf8;
+  --b5:#157347; --b4:#3f8f3a; --b3:#a07800; --b2:#c25e00; --b1:#b3261e; --b0:#7a1a14;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+  --num:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b121c; --surface:#141f2e; --ink:#e7edf5; --muted:#93a3b8; --line:#26354a;
+  --board:#050a11; --board-ink:#f4f7fb; --lane:#7fa8ec; --lane-soft:#1b2b45;
+  --b5:#3fbf7f; --b4:#7cc46a; --b3:#e0b43a; --b2:#f08a3c; --b1:#f06a60; --b0:#d9534a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b121c; --surface:#141f2e; --ink:#e7edf5; --muted:#93a3b8; --line:#26354a;
+  --board:#050a11; --board-ink:#f4f7fb; --lane:#7fa8ec; --lane-soft:#1b2b45;
+  --b5:#3fbf7f; --b4:#7cc46a; --b3:#e0b43a; --b2:#f08a3c; --b1:#f06a60; --b0:#d9534a; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.4 var(--font);-webkit-text-size-adjust:100%;
+  padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums}
+
+/* Kopf */
+header{position:sticky;top:0;z-index:10;background:var(--board);color:var(--board-ink);
+  padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px}
+.hrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.brand{font-weight:800;letter-spacing:.02em;font-size:17px;display:flex;align-items:center;gap:8px}
+.brand::before{content:"";width:14px;height:4px;background:var(--signal);border-radius:2px}
+.dg{margin-left:auto;display:flex;gap:6px;align-items:center;min-width:0}
+.dg select{background:#1d2b40;border:1px solid #33465f;color:var(--board-ink);border-radius:8px;padding:6px 8px;max-width:52vw}
+.legend{font-size:12px;color:#aebbd0;margin-top:6px}
+.legend b{color:var(--signal)}
+
+main{padding:14px 16px 24px;max-width:1100px;margin:0 auto}
+.view[hidden]{display:none}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:18px 0 8px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 14px;font-weight:600}
+.btn.primary{background:var(--lane);border-color:var(--lane);color:#fff}
+.btn.danger{color:var(--b1)}
+.btn.small{padding:5px 10px;font-size:13px}
+.banner{background:var(--signal);color:#1a1400;border-radius:var(--r);padding:10px 12px;margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner .btn{background:#fff8d6;border-color:#d9ad00;color:#1a1400}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:22px;color:var(--muted)}
+.empty b{color:var(--ink)}
+
+/* Matrix */
+.mwrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);-webkit-overflow-scrolling:touch}
+table.m{border-collapse:separate;border-spacing:0;min-width:100%}
+table.m th,table.m td{border-bottom:1px solid var(--line);padding:0;text-align:center;white-space:nowrap}
+table.m thead th{font-size:12px;color:var(--muted);font-weight:700;padding:8px 6px;background:var(--surface);text-transform:uppercase;letter-spacing:.04em}
+table.m th.name,table.m td.name{position:sticky;left:0;background:var(--surface);text-align:left;z-index:1;border-right:1px solid var(--line)}
+table.m td.name button{all:unset;display:block;padding:10px 12px;cursor:pointer;max-width:42vw;overflow:hidden;text-overflow:ellipsis}
+table.m td.name .nm{font-weight:650}
+table.m td.name .meta{font-size:11px;color:var(--muted)}
+table.m tr:last-child td{border-bottom:0}
+.cell{all:unset;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:86px;min-height:58px;padding:6px 8px;cursor:pointer}
+.cell:hover{background:var(--lane-soft)}
+.cell .plus{color:var(--line);font-size:22px;font-weight:300}
+.cell .val{font-family:var(--num);font-size:14px;font-weight:600}
+.cell .sub{display:flex;gap:6px;align-items:baseline;font-size:12px;color:var(--muted);font-family:var(--num)}
+.np{display:inline-block;min-width:22px;padding:0 5px;border-radius:5px;color:#fff;font-weight:800;font-family:var(--num);text-align:center}
+.nA{color:var(--muted);font-family:var(--num)}
+.b5{background:var(--b5)}.b4{background:var(--b4)}.b3{background:var(--b3)}.b2{background:var(--b2)}.b1{background:var(--b1)}.b0{background:var(--b0)}
+.tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.05em;border-radius:4px;padding:1px 4px;margin-left:4px;vertical-align:1px;background:var(--lane-soft);color:var(--lane)}
+
+/* Vierkampf-Liste */
+.vk{display:grid;gap:8px}
+.vkrow{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.vkrow .nm{font-weight:650}
+.vkrow .parts{grid-column:1/2;font-size:12px;color:var(--muted);min-width:0}
+.vkrow .res{grid-row:1/3;grid-column:2;text-align:right}
+.vkrow .sum{font-family:var(--num);font-size:18px;font-weight:700}
+.warn{color:var(--b2);font-weight:600}
+
+/* Daten */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.plist{display:grid;gap:0}
+.plist div{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+.plist div:last-child{border-bottom:0}
+.plist .grow{flex:1;min-width:0}
+textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:8px;font-family:var(--num);font-size:13px}
+.hint{font-size:13px;color:var(--muted)}
+table.ladder{border-collapse:collapse;font-family:var(--num);font-size:13px;width:100%;max-width:420px}
+table.ladder th,table.ladder td{border-bottom:1px solid var(--line);padding:4px 8px;text-align:right}
+table.ladder th{font-family:var(--font);color:var(--muted);font-size:12px}
+table.ladder .est td{color:var(--b2)}
+
+/* Navigation */
+nav{position:fixed;left:0;right:0;bottom:0;z-index:10;display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{all:unset;cursor:pointer;text-align:center;padding:12px 0 10px;font-weight:650;font-size:14px;color:var(--muted)}
+nav button[aria-current="true"]{color:var(--lane);box-shadow:inset 0 3px 0 var(--lane)}
+
+/* Sheet */
+.ov{position:fixed;inset:0;background:rgba(5,10,17,.5);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.ov[hidden]{display:none}
+.sheet{background:var(--surface);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;
+  padding:16px 16px calc(18px + env(safe-area-inset-bottom,0px))}
+@media (min-width:700px){.ov{align-items:center}.sheet{border-radius:16px}}
+.sheet h3{margin:0 0 2px;font-size:19px}
+.sheet .subt{color:var(--muted);font-size:13px;margin-bottom:12px}
+.field{display:grid;gap:4px;margin-bottom:12px}
+.field label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.field input,.field select{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:10px;font-size:17px;width:100%}
+.big input{font-family:var(--num);font-size:28px;font-weight:700;padding:10px 12px}
+.tin{display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center}
+.tin span{font-family:var(--num);font-size:26px;font-weight:700}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:6px 11px;font-size:13px;font-weight:600}
+.chip[aria-pressed="true"]{background:var(--lane);border-color:var(--lane);color:#fff}
+.chip .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--b5);margin-left:5px;vertical-align:2px}
+.score{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:var(--board);color:var(--board-ink);border-radius:var(--r);padding:12px;margin-bottom:14px}
+.score div{display:grid;gap:2px}
+.score small{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#aebbd0}
+.score b{font-family:var(--num);font-size:30px;line-height:1.1}
+.score .u b{color:var(--signal)}
+.score .band{grid-column:1/-1;font-size:12px;color:#aebbd0}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.actions .btn{flex:1 1 auto;padding:12px 14px}
+.hist{font-size:13px;margin:0 0 12px;padding:0;list-style:none}
+.hist li{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+.dl{display:grid;gap:0}
+.dl button{all:unset;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--line)}
+.dl button:hover{background:var(--lane-soft)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--board);color:var(--board-ink);padding:10px 16px;border-radius:999px;z-index:60;font-weight:600;font-size:14px}
+.toast[hidden]{display:none}
+
+/* Druck */
+#print{display:none}
+@media print{
+  body{background:#fff;color:#000;padding:0}
+  header,nav,main,.ov,.toast{display:none!important}
+  #print{display:block;font:11px/1.35 var(--font)}
+  #print h1{font-size:16px;margin:0 0 4px}
+  #print table{border-collapse:collapse;width:100%;margin:10px 0 16px}
+  #print th,#print td{border:1px solid #999;padding:3px 4px;text-align:center}
+  #print td:first-child,#print th:first-child{text-align:left}
+}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <div class="brand">LA-Punkte</div>
+    <div class="dg"><select id="dgSel" aria-label="Durchgang"></select></div>
+  </div>
+  <div class="legend">Punkte nach EPA · <b>U</b> = Notenpunkte Unterricht · A = Notenpunkte Abitur</div>
+</header>
+
+<main>
+  <div id="backupBanner" class="banner" hidden>
+    <span id="backupText">Letzte Sicherung ist länger als 7 Tage her.</span>
+    <button class="btn small" data-act="backup">Jetzt sichern</button>
+  </div>
+
+  <section class="view" id="v-kurs">
+    <div class="toolbar">
+      <button class="btn primary" data-act="addPerson">+ Schüler:in</button>
+      <button class="btn" data-act="pickDisz">Disziplinen</button>
+    </div>
+    <div id="matrix"></div>
+  </section>
+
+  <section class="view" id="v-vk" hidden>
+    <p class="hint">Vierkampf nach EPA S. 42–44: je eine Mittel-/Langstrecke, Sprung, Wurf/Stoß, dazu eine freie Disziplin. Die App schlägt die punktbeste gültige Kombination vor. Antippen zum Ändern.</p>
+    <div id="vkList" class="vk"></div>
+  </section>
+
+  <section class="view" id="v-daten" hidden>
+    <h2>Sichern &amp; Exportieren</h2>
+    <div class="card">
+      <div class="toolbar" style="margin:0">
+        <button class="btn primary" data-act="backup">Sicherung speichern (JSON)</button>
+        <button class="btn" data-act="restore">Sicherung laden</button>
+        <button class="btn" data-act="csv">Ergebnisse als CSV</button>
+        <button class="btn" data-act="print">Drucken / PDF</button>
+      </div>
+      <p class="hint" id="backupInfo"></p>
+      <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+    </div>
+
+    <h2>Schüler:innen</h2>
+    <div class="card">
+      <div id="plist" class="plist"></div>
+      <div class="toolbar" style="margin:10px 0 0"><button class="btn primary" data-act="addPerson">+ Schüler:in</button></div>
+    </div>
+
+    <h2>Liste einfügen (CSV oder aus Numbers kopiert)</h2>
+    <div class="card">
+      <p class="hint">Eine Zeile pro Person: <span class="num">Name; Geburtsdatum; Geschlecht</span>. Datum als 14.03.2009, Geschlecht m oder w. Trennzeichen Semikolon, Komma oder Tab.</p>
+      <textarea id="importText" placeholder="Peter Muster; 14.03.2009; m&#10;Lena Beispiel; 02.11.2008; w"></textarea>
+      <div class="toolbar" style="margin:8px 0 0">
+        <button class="btn primary" data-act="importText">Übernehmen</button>
+        <button class="btn" data-act="importFile">CSV-Datei wählen</button>
+      </div>
+      <input type="file" id="importFile" accept=".csv,.txt,text/csv,text/plain" hidden>
+    </div>
+
+    <h2>Durchgänge</h2>
+    <div class="card">
+      <p class="hint">Ein Durchgang bündelt die Ergebnisse eines Testblocks, z. B. Standortbestimmung (P1) und Leistungsüberprüfung (P8). Das Datum wird pro Ergebnis gespeichert.</p>
+      <div id="dglist" class="plist"></div>
+      <div class="toolbar" style="margin:10px 0 0"><button class="btn" data-act="addDg">+ Durchgang</button></div>
+    </div>
+
+    <h2>Bewertung</h2>
+    <div class="card">
+      <p class="hint">Punkte: lineare Interpolation zwischen den EPA-Tabellenstufen, abgerundet auf ganze Punkte, Überpunkte über 100 möglich (EPA S. 44). Kugel, Diskus und Speer: U18 (jahrgangsmäßig 16/17 im Prüfungsjahr) wirft leichtere Geräte nach derselben Tabelle.</p>
+      <div id="ladder" style="overflow-x:auto"></div>
+      <p class="hint">Orange: geschätzte Stufen (die 5er-Leiter reicht im Unterricht unten nicht bis 0). Vierkampf: Abitur nach EPA-Tabelle (15 ab 300 Punkten, je 20 Punkte eine Stufe). Unterricht analog mit der Unterrichtsleiter auf den Durchschnitt pro Disziplin (15 ab 260).</p>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-view="kurs" aria-current="true">Kurs</button>
+  <button data-view="vk">Vierkampf</button>
+  <button data-view="daten">Daten</button>
+</nav>
+
+<div class="ov" id="ov" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+<div id="print"></div>
+
+<script>
+'use strict';
+/* ===== EPA-Wertungstabellen (EPA EB Sport 2019, S. 45–47), Werte für 100, 95, … 0 Punkte. Zeiten in Sekunden, Weiten in Metern. ===== */
+const TAB = {"m":{"d100":[11.5,11.6,11.7,11.9,12.0,12.1,12.2,12.3,12.4,12.6,12.8,13.0,13.2,13.4,13.6,13.9,14.2,14.5,14.8,15.1,15.5],"d200":[23.8,24.0,24.2,24.6,24.8,25.0,25.2,25.4,25.6,26.0,26.4,26.8,27.2,27.6,28.2,28.8,29.0,29.4,29.8,30.2,30.7],"d400":[54.6,54.9,55.2,55.9,56.3,56.7,57.2,57.8,58.4,59.2,60.0,60.8,61.8,62.8,63.8,65.0,66.4,67.6,68.7,70.0,71.5],"d800":[131.0,132.0,133.0,136.0,138.0,140.0,142.0,144.0,146.0,149.0,152.5,156.0,159.5,163.0,166.5,170.5,174.5,178.5,182.5,186.5,191.5],"d1000":[168.0,170.0,172.0,177.5,180.0,183.0,186.0,189.5,193.5,197.5,201.5,206.0,211.0,216.5,221.5,227.0,233.5,240.0,246.5,253.5,261.5],"d1500":[270.0,273.0,276.0,283.0,287.0,291.0,297.0,303.0,309.0,315.0,321.0,327.0,334.0,343.0,352.0,364.0,376.0,388.0,400.0,412.0,424.5],"d3000":[595.0,603.0,620.0,629.0,639.0,650.0,662.0,675.0,689.0,704.0,721.0,748.0,765.0,792.0,819.0,846.0,873.0,900.0,927.0,954.0,981.0],"huerden":[17.0,17.1,17.2,17.3,17.5,17.7,17.9,18.1,18.3,18.5,19.0,19.5,20.0,20.5,21.0,21.5,22.0,22.5,23.0,23.5,24.0],"weit":[6.06,6.01,5.96,5.85,5.78,5.7,5.61,5.51,5.4,5.28,5.15,5.01,4.87,4.73,4.59,4.42,4.24,4.06,3.88,3.7,3.52],"drei":[13.25,13.0,12.75,12.5,12.25,12.0,11.75,11.5,11.25,11.0,10.75,10.5,10.25,10.0,9.75,9.5,9.2,8.9,8.6,8.3,8.0],"hoch":[1.78,1.76,1.74,1.7,1.68,1.66,1.64,1.62,1.6,1.57,1.54,1.51,1.47,1.43,1.39,1.35,1.31,1.27,1.23,1.19,1.15],"stab":[3.15,3.1,3.05,2.95,2.9,2.84,2.78,2.72,2.66,2.57,2.48,2.39,2.25,2.14,2.02,1.9,1.77,1.64,1.51,1.38,1.25],"kugel":[11.0,10.85,10.7,10.35,10.15,9.95,9.7,9.45,9.2,8.95,8.7,8.45,8.15,7.85,7.55,7.1,6.6,6.1,5.6,5.1,4.6],"diskus":[33.1,32.6,32.1,31.6,30.5,29.8,29.1,28.3,27.5,26.7,25.6,24.5,23.4,22.2,21.0,19.8,18.0,16.2,14.4,12.6,10.8],"speer":[42.5,41.9,41.2,39.7,38.9,38.0,37.1,36.1,35.1,33.9,32.7,31.5,30.0,28.5,27.0,25.2,23.4,21.6,19.8,18.0,16.2],"schleuder":[48.0,47.5,47.0,45.0,44.0,43.0,41.5,40.0,39.5,37.0,35.5,34.0,31.5,29.0,26.5,24.0,21.5,19.0,16.5,13.5,10.5]},"w":{"d100":[13.0,13.1,13.2,13.6,13.7,13.8,13.9,14.0,14.1,14.4,14.6,14.8,15.0,15.3,15.5,15.9,16.2,16.5,16.8,17.1,17.4],"d200":[27.6,27.8,28.0,28.8,29.0,29.3,29.5,29.7,30.0,30.4,30.9,31.4,31.8,32.3,33.0,33.5,33.9,34.4,34.9,35.4,35.9],"d400":[63.5,64.0,64.5,65.0,65.5,66.0,67.0,68.0,69.0,70.0,71.0,73.0,75.0,77.0,79.0,81.0,84.0,87.0,90.0,93.0,96.0],"d800":[156.8,159.9,163.0,166.1,169.2,173.8,178.5,183.1,189.3,195.6,201.8,208.0,215.7,223.5,231.2,239.0,246.8,254.5,262.3,270.0,277.8],"d1000":[202.0,206.0,210.0,214.0,218.0,224.0,230.0,236.0,244.0,252.0,260.0,268.0,278.0,288.0,298.0,308.0,318.0,328.0,338.0,348.0,358.0],"d1500":[325.7,332.2,338.6,345.1,351.5,361.2,370.9,380.6,393.5,406.4,419.3,432.2,448.2,464.4,480.5,496.7,512.8,528.9,545.0,561.2,577.3],"d3000":[716.5,730.8,744.9,759.2,773.3,794.6,816.0,837.3,865.7,894.1,922.5,950.8,986.3,1021.7,1057.1,1092.7,1128.2,1163.6,1199.0,1234.6,1270.1],"huerden":[16.0,16.2,16.4,16.8,17.0,17.2,17.5,17.8,18.0,18.8,19.2,19.6,20.0,20.4,20.9,21.4,22.0,22.6,23.2,23.8,24.4],"weit":[4.77,4.72,4.67,4.6,4.55,4.49,4.42,4.36,4.28,4.2,4.1,4.0,3.89,3.77,3.64,3.52,3.4,3.2,3.0,2.8,2.6],"drei":[10.45,10.2,9.95,9.7,9.45,9.2,8.95,8.7,8.45,8.2,7.95,7.7,7.45,7.2,6.95,6.7,6.35,6.0,5.65,5.3,4.95],"hoch":[1.5,1.48,1.46,1.44,1.42,1.4,1.38,1.36,1.34,1.32,1.3,1.28,1.26,1.24,1.21,1.18,1.15,1.12,1.09,1.06,1.03],"stab":[2.44,2.38,2.32,2.26,2.2,2.14,2.1,2.06,2.0,1.94,1.88,1.82,1.76,1.7,1.64,1.58,1.52,1.46,1.4,1.34,1.28],"kugel":[9.15,9.05,8.95,8.85,8.7,8.55,8.4,8.2,8.0,7.8,7.55,7.3,7.05,6.75,6.46,6.2,5.85,5.5,5.15,4.8,4.45],"diskus":[28.3,27.5,27.0,26.5,25.9,25.3,24.7,24.1,23.4,22.6,21.6,20.5,19.3,18.1,17.1,16.1,15.1,14.1,13.1,12.1,11.1],"speer":[28.0,27.5,27.0,25.8,25.3,24.8,24.4,23.8,23.2,22.5,21.8,21.1,20.3,19.5,18.7,17.5,16.5,15.5,14.5,13.5,12.5],"schleuder":[40.5,40.0,39.5,39.0,38.5,36.5,35.5,34.5,33.5,32.5,31.0,29.5,27.5,25.5,23.5,21.5,19.5,17.5,15.0,12.5,10.0]}};
+
+/* ===== Notenpunkte-Leitern: Index k-1 = Mindestpunktzahl für k Notenpunkte ===== */
+const LADDER = {
+  U: [1,3,5,10,15,20,25,30,35,40,45,50,55,60,65],   // Unterricht: 15 ab 65; NP 1 und 2 geschätzt
+  A: [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75]  // Abitur: 15 ab 75
+};
+const ESTIMATED_U = [1,2];
+
+const DISZ = {
+  d100:{s:'100 m',g:'sprint',u:'s'}, d200:{s:'200 m',g:'sprint',u:'s'}, d400:{s:'400 m',g:'sprint',u:'s'},
+  huerden:{s:'Hürden',g:'sprint',u:'s'},
+  d800:{s:'800 m',g:'ml',u:'min'}, d1000:{s:'1000 m',g:'ml',u:'min'}, d1500:{s:'1500 m',g:'ml',u:'min'}, d3000:{s:'3000 m',g:'ml',u:'min'},
+  weit:{s:'Weit',l:'Weitsprung',g:'sprung',u:'m'}, drei:{s:'Drei',l:'Dreisprung',g:'sprung',u:'m'},
+  hoch:{s:'Hoch',l:'Hochsprung',g:'sprung',u:'m'}, stab:{s:'Stab',l:'Stabhochsprung',g:'sprung',u:'m'},
+  kugel:{s:'Kugel',l:'Kugelstoß',g:'wurf',u:'m'}, diskus:{s:'Diskus',l:'Diskuswurf',g:'wurf',u:'m'},
+  speer:{s:'Speer',l:'Speerwurf',g:'wurf',u:'m'}, schleuder:{s:'Schleuder',l:'Schleuderball',g:'wurf',u:'m'}
+};
+const ORDER = ['d100','d200','d400','huerden','d800','d1000','d1500','d3000','weit','drei','hoch','stab','kugel','diskus','speer','schleuder'];
+const GROUPS = {ml:'Mittel-/Langstrecke', sprung:'Sprung', wurf:'Wurf/Stoß', sprint:'Sprint/Hürden'};
+const GEW = { // [Tabelle/Ü18, U18]
+  m:{kugel:['6 kg','5 kg'],diskus:['1,75 kg','1,5 kg'],speer:['800 g','700 g'],schleuder:['1,5 kg','1,5 kg']},
+  w:{kugel:['4 kg','3 kg'],diskus:['1 kg','1 kg'],speer:['600 g','500 g'],schleuder:['1 kg','1 kg']}
+};
+function label(id, sex){
+  if(id==='huerden') return sex==='w' ? '100 m Hürden' : sex==='m' ? '110 m Hürden' : 'Hürden';
+  return DISZ[id].l || DISZ[id].s;
+}
+
+/* ===== Rechenkern ===== */
+function punkte(sex, id, w){
+  const t = TAB[sex] && TAB[sex][id];
+  if(!t || !(w>0)) return null;
+  const f = (i, v) => (100 - 5*i) - (v - t[i]) / (t[i+1] - t[i]) * 5;
+  const lower = t[0] < t[20];                       // Zeiten: kleiner ist besser
+  let p;
+  if(lower ? w <= t[0] : w >= t[0]) p = f(0, w);   // Überpunkte: Steigung der obersten Stufe
+  else if(lower ? w >= t[20] : w <= t[20]) p = 0;
+  else for(let i=0;i<20;i++){
+    const a=t[i], b=t[i+1];
+    if((w>=Math.min(a,b)) && (w<=Math.max(a,b))){ p = f(i, w); break; }
+  }
+  return Math.max(0, Math.floor(p + 1e-9));
+}
+function np(p, key){ if(p==null) return null; let n=0; LADDER[key].forEach((min,i)=>{ if(p>=min) n=i+1; }); return n; }
+function band(n){ return n>=13?5:n>=10?4:n>=7?3:n>=4?2:n>=1?1:0; }
+const BANDTXT = ['ungenügend','mangelhaft','ausreichend','befriedigend','gut','sehr gut'];
+
+function isU18(person, dateStr){
+  if(!person.geb) return null;
+  const y = +(dateStr||today()).slice(0,4), gy = +person.geb.slice(0,4);
+  return (y - gy) <= 17;
+}
+
+/* ===== Format / Parsing ===== */
+function dec(n, d){ return n.toFixed(d).replace('.',','); }
+function fmtW(id, w){
+  const u = DISZ[id].u;
+  if(u==='m') return dec(w,2)+' m';
+  const d = Math.abs(w*10 - Math.round(w*10)) < 1e-6 ? 1 : 2;
+  if(u==='s' && w < 60) return dec(w,d)+' s';
+  const m = Math.floor(w/60), s = w - m*60;
+  return m+':'+(s<10?'0':'')+dec(s,d);
+}
+function num(s){ if(s==null) return NaN; s=String(s).trim().replace(',','.'); return s==='' ? NaN : Number(s); }
+function today(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fmtDate(iso){ if(!iso) return ''; const [y,m,d]=iso.split('-'); return d+'.'+m+'.'+y; }
+function parseDate(s){
+  s=(s||'').trim(); let m;
+  if((m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  if((m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/))){
+    let y=+m[3]; if(y<100) y += y<50 ? 2000 : 1900;
+    return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  }
+  return '';
+}
+function parseSex(s){ s=(s||'').trim().toLowerCase(); if(/^(m|j|männlich|maennlich|junge)/.test(s)) return 'm'; if(/^(w|f|weiblich|mädchen|maedchen)/.test(s)) return 'w'; return ''; }
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+/* ===== Zustand & Speicherung ===== */
+const KEY = 'la-punkte-v1';
+let S;
+function fresh(){
+  const dg = uid();
+  return {v:1, personen:[], dgs:[{id:dg,name:'Standortbestimmung'}], dg, aktiv:['d100','weit','kugel','speer','d3000'], res:{}, vk:{}, lastBackup:null, changedSinceBackup:false};
+}
+function load(){
+  try{ const raw = localStorage.getItem(KEY); S = raw ? JSON.parse(raw) : fresh(); }catch(e){ S = fresh(); }
+  if(!S.dgs || !S.dgs.length) S = Object.assign(fresh(), S, {dgs:fresh().dgs});
+  if(!S.dgs.find(d=>d.id===S.dg)) S.dg = S.dgs[0].id;
+}
+function save(changed=true){
+  if(changed) S.changedSinceBackup = true;
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch(e){ toast('Speichern fehlgeschlagen. Bitte sofort eine Sicherung exportieren.'); }
+}
+function sorted(){ return S.personen.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')); }
+function getRes(dg, pid, id){ return ((S.res[dg]||{})[pid]||{})[id] || null; }
+function setRes(dg, pid, id, r){
+  S.res[dg] = S.res[dg] || {}; S.res[dg][pid] = S.res[dg][pid] || {};
+  if(r) S.res[dg][pid][id] = r; else delete S.res[dg][pid][id];
+}
+function person(pid){ return S.personen.find(p=>p.id===pid); }
+function evalRes(p, id, r){
+  if(!r) return null;
+  const pts = punkte(p.sex, id, r.w);
+  return {pts, u:np(pts,'U'), a:np(pts,'A')};
+}
+
+/* ===== Vierkampf ===== */
+function vkCandidates(p, dg){
+  const out = [];
+  ORDER.forEach(id=>{ const r = getRes(dg,p.id,id); if(r){ const e = evalRes(p,id,r); if(e && e.pts!=null) out.push({id, pts:e.pts}); } });
+  return out;
+}
+function vkValid(sel){
+  if(sel.length!==4 || new Set(sel).size!==4) return false;
+  const g = sel.map(id=>DISZ[id].g);
+  return ['ml','sprung','wurf'].every(x=>g.includes(x)) && ['ml','sprung','wurf'].every(x=>g.filter(y=>y===x).length<=2);
+}
+function vkBest(p, dg){
+  const c = vkCandidates(p,dg); let best=null;
+  for(let a=0;a<c.length;a++)for(let b=a+1;b<c.length;b++)for(let d=b+1;d<c.length;d++)for(let e=d+1;e<c.length;e++){
+    const sel=[c[a],c[b],c[d],c[e]];
+    if(!vkValid(sel.map(x=>x.id))) continue;
+    const sum = sel.reduce((s,x)=>s+x.pts,0);
+    if(!best || sum>best.sum) best={ids:sel.map(x=>x.id), sum};
+  }
+  return best;
+}
+function vkOrder(ids){ // Reihenfolge: Mittel/Lang, Sprung, Wurf, frei
+  const rest = ids.slice(), out=[];
+  ['ml','sprung','wurf'].forEach(g=>{ const i = rest.findIndex(id=>DISZ[id].g===g); if(i>=0) out.push(rest.splice(i,1)[0]); });
+  return out.concat(rest);
+}
+function vkResult(p, dg){
+  const stored = (S.vk[dg]||{})[p.id];
+  let ids = null, auto = true;
+  if(stored && vkValid(stored) && stored.every(id=>getRes(dg,p.id,id))){ ids = stored; auto = false; }
+  else { const b = vkBest(p,dg); if(b) ids = b.ids; }
+  if(!ids){
+    const c = vkCandidates(p,dg), have = new Set(c.map(x=>DISZ[x.id].g));
+    const missing = ['ml','sprung','wurf'].filter(g=>!have.has(g)).map(g=>GROUPS[g]);
+    if(c.length<4 && !missing.length) missing.push((4-c.length)+' weitere Disziplin'+(4-c.length>1?'en':''));
+    return {ids:null, missing};
+  }
+  ids = vkOrder(ids);
+  const parts = ids.map(id=>({id, pts: evalRes(p,id,getRes(dg,p.id,id)).pts}));
+  const sum = parts.reduce((s,x)=>s+x.pts,0);
+  return {ids, parts, sum, u:np(sum/4,'U'), a:np(sum/4,'A'), auto};
+}
+
+/* ===== Rendering ===== */
+function npBadge(n){ return n==null ? '' : `<span class="np b${band(n)}">${n}</span>`; }
+function renderHeader(){
+  const sel = document.getElementById('dgSel');
+  sel.innerHTML = S.dgs.map(d=>`<option value="${d.id}"${d.id===S.dg?' selected':''}>${esc(d.name)}</option>`).join('');
+}
+function renderMatrix(){
+  const el = document.getElementById('matrix'), ps = sorted(), cols = ORDER.filter(id=>S.aktiv.includes(id));
+  if(!ps.length){
+    el.innerHTML = `<div class="empty"><b>Noch keine Schüler:innen.</b><br>Lege sie mit „+ Schüler:in“ an oder füge unter <b>Daten</b> eine Liste aus Numbers ein. Danach Name antippen, Disziplin wählen, Leistung eintragen – Punkte und Notenpunkte erscheinen sofort.</div>`;
+    return;
+  }
+  if(!cols.length){ el.innerHTML = `<div class="empty"><b>Keine Disziplin ausgewählt.</b> Über „Disziplinen“ die Spalten festlegen.</div>`; return; }
+  let h = `<div class="mwrap"><table class="m"><thead><tr><th class="name">Name</th>${cols.map(id=>`<th>${DISZ[id].s}</th>`).join('')}</tr></thead><tbody>`;
+  ps.forEach(p=>{
+    const u18 = isU18(p);
+    h += `<tr><td class="name"><button data-person="${p.id}"><div class="nm">${esc(p.name)}</div><div class="meta">${p.sex==='w'?'w':p.sex==='m'?'m':'?'}${p.geb?' · '+p.geb.slice(0,4):''}${u18?'<span class="tag">U18</span>':''}</div></button></td>`;
+    cols.forEach(id=>{
+      const r = getRes(S.dg,p.id,id), e = evalRes(p,id,r);
+      h += `<td><button class="cell" data-p="${p.id}" data-d="${id}" aria-label="${esc(p.name)}, ${label(id,p.sex)}">` +
+        (r ? `<span class="val">${fmtW(id,r.w)}</span><span class="sub">${e&&e.pts!=null?e.pts+' P':'–'} ${npBadge(e&&e.u)} <span class="nA">A&nbsp;${e&&e.a!=null?e.a:'–'}</span></span>` : `<span class="plus">+</span>`) +
+        `</button></td>`;
+    });
+    h += `</tr>`;
+  });
+  el.innerHTML = h + `</tbody></table></div>`;
+}
+function renderVK(){
+  const el = document.getElementById('vkList'), ps = sorted();
+  if(!ps.length){ el.innerHTML = `<div class="empty">Noch keine Schüler:innen angelegt.</div>`; return; }
+  el.innerHTML = ps.map(p=>{
+    const v = vkResult(p,S.dg);
+    if(!v.ids) return `<button class="vkrow" data-vk="${p.id}"><span class="nm">${esc(p.name)}</span><span class="parts warn">Fehlt: ${esc(v.missing.join(', '))}</span><span class="res"></span></button>`;
+    return `<button class="vkrow" data-vk="${p.id}"><span class="nm">${esc(p.name)}</span>
+      <span class="parts">${v.parts.map(x=>DISZ[x.id].s+' '+x.pts).join(' · ')}${v.auto?' · <i>Vorschlag</i>':''}</span>
+      <span class="res"><span class="sum">${v.sum}</span><br>${npBadge(v.u)} <span class="nA">A&nbsp;${v.a}</span></span></button>`;
+  }).join('');
+}
+function renderDaten(){
+  const ps = sorted();
+  document.getElementById('plist').innerHTML = ps.length ? ps.map(p=>`<div><span class="grow"><b>${esc(p.name)}</b><br><span class="hint">${p.geb?fmtDate(p.geb):'kein Geburtsdatum'} · ${p.sex==='w'?'weiblich':p.sex==='m'?'männlich':'Geschlecht fehlt'}${isU18(p)?' · U18':''}</span></span><button class="btn small" data-edit="${p.id}">Bearbeiten</button></div>`).join('') : '<p class="hint">Noch niemand angelegt.</p>';
+  document.getElementById('dglist').innerHTML = S.dgs.map(d=>`<div><span class="grow">${esc(d.name)}${d.id===S.dg?' <span class="tag">aktiv</span>':''}</span><button class="btn small" data-dgedit="${d.id}">Umbenennen</button>${S.dgs.length>1?`<button class="btn small danger" data-dgdel="${d.id}">Löschen</button>`:''}</div>`).join('');
+  let lt = `<table class="ladder"><thead><tr><th>Notenpunkte</th><th>Unterricht ab</th><th>Abitur ab</th><th>Vierkampf Abitur ab</th></tr></thead><tbody>`;
+  for(let k=15;k>=0;k--){
+    const u = k? LADDER.U[k-1]:0, a = k? LADDER.A[k-1]:0;
+    lt += `<tr class="${ESTIMATED_U.includes(k)?'est':''}"><td>${String(k).padStart(2,'0')}</td><td>${u}</td><td>${a}</td><td>${a*4}</td></tr>`;
+  }
+  document.getElementById('ladder').innerHTML = lt + '</tbody></table>';
+  document.getElementById('backupInfo').textContent = S.lastBackup ? 'Letzte Sicherung: '+new Date(S.lastBackup).toLocaleString('de-DE') : 'Noch keine Sicherung exportiert.';
+}
+function renderBanner(){
+  const has = S.personen.length>0;
+  const old = !S.lastBackup || (Date.now()-S.lastBackup) > 7*864e5;
+  const b = document.getElementById('backupBanner');
+  b.hidden = !(has && S.changedSinceBackup && old);
+  document.getElementById('backupText').textContent = S.lastBackup ? 'Letzte Sicherung ist länger als 7 Tage her.' : 'Noch keine Sicherung. Einmal exportieren schützt vor Datenverlust.';
+}
+function render(){ renderHeader(); renderMatrix(); renderVK(); renderDaten(); renderBanner(); }
+
+/* ===== Sheets ===== */
+const ov = document.getElementById('ov'), sheet = document.getElementById('sheet');
+function openSheet(html){ sheet.innerHTML = html; ov.hidden = false; }
+function closeSheet(){ ov.hidden = true; sheet.innerHTML=''; }
+ov.addEventListener('click', e=>{ if(e.target===ov) closeSheet(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !ov.hidden) closeSheet(); });
+let toastT;
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2600); }
+
+function personSheet(pid){
+  const p = pid ? person(pid) : {name:'',geb:'',sex:''};
+  openSheet(`<h3>${pid?'Schüler:in bearbeiten':'Neue:r Schüler:in'}</h3><div class="subt">Geburtsdatum bestimmt U18 (Wurfgeräte).</div>
+    <form id="pf">
+      <div class="field"><label for="pName">Name</label><input id="pName" required value="${esc(p.name)}" autocomplete="off"></div>
+      <div class="field"><label for="pGeb">Geburtsdatum</label><input id="pGeb" type="date" value="${p.geb||''}"></div>
+      <div class="field"><label>Geschlecht</label><div class="chips" id="pSex">
+        <button type="button" class="chip" data-sex="m" aria-pressed="${p.sex==='m'}">männlich</button>
+        <button type="button" class="chip" data-sex="w" aria-pressed="${p.sex==='w'}">weiblich</button></div></div>
+      <div class="actions">
+        <button class="btn primary" type="submit">Speichern</button>
+        ${pid?'':'<button class="btn" type="button" id="pNext">Speichern + nächste:r</button>'}
+        ${pid?'<button class="btn danger" type="button" id="pDel">Löschen</button>':''}
+      </div>
+    </form>`);
+  let sex = p.sex;
+  sheet.querySelectorAll('[data-sex]').forEach(b=>b.onclick=()=>{ sex=b.dataset.sex; sheet.querySelectorAll('[data-sex]').forEach(x=>x.setAttribute('aria-pressed', x===b)); });
+  const commit = ()=>{
+    const name = sheet.querySelector('#pName').value.trim();
+    if(!name){ toast('Bitte einen Namen eintragen.'); return false; }
+    if(!sex){ toast('Bitte das Geschlecht wählen – davon hängt die Tabelle ab.'); return false; }
+    const geb = sheet.querySelector('#pGeb').value;
+    if(pid) Object.assign(person(pid), {name, geb, sex});
+    else S.personen.push({id:uid(), name, geb, sex});
+    save(); render(); return true;
+  };
+  sheet.querySelector('#pf').onsubmit = e=>{ e.preventDefault(); if(commit()){ closeSheet(); toast('Gespeichert'); } };
+  const nx = sheet.querySelector('#pNext'); if(nx) nx.onclick = ()=>{ if(commit()){ toast('Gespeichert'); personSheet(null); } };
+  const del = sheet.querySelector('#pDel');
+  if(del) del.onclick = ()=>{
+    if(!confirm(`${p.name} mit allen Ergebnissen löschen?`)) return;
+    S.personen = S.personen.filter(x=>x.id!==pid);
+    Object.values(S.res).forEach(r=>delete r[pid]); Object.values(S.vk).forEach(r=>delete r[pid]);
+    save(); render(); closeSheet(); toast('Gelöscht');
+  };
+  if(!pid) sheet.querySelector('#pName').focus();
+}
+
+function personDetail(pid){
+  const p = person(pid);
+  const ids = ORDER.slice().sort((a,b)=>(S.aktiv.includes(b)-S.aktiv.includes(a)));
+  const rows = ids.map(id=>{
+    const r = getRes(S.dg,pid,id), e = evalRes(p,id,r);
+    return `<button data-go="${id}"><span>${label(id,p.sex)}${S.aktiv.includes(id)?'':' <span class="hint">(nicht in der Matrix)</span>'}</span><span class="num">${r?fmtW(id,r.w)+' · '+e.pts+' P '+npBadge(e.u)+' <span class="nA">A '+e.a+'</span>':'<span class="hint">+</span>'}</span></button>`;
+  }).join('');
+  const hist = [];
+  S.dgs.forEach(d=>{ ORDER.forEach(id=>{ const r=getRes(d.id,pid,id); if(r){ const e=evalRes(p,id,r); hist.push(`<li><span>${esc(d.name)} · ${label(id,p.sex)}<br><span class="hint">${fmtDate(r.d)}</span></span><span class="num">${fmtW(id,r.w)} · ${e.pts} P · U ${e.u} · A ${e.a}</span></li>`);} }); });
+  const u18 = isU18(p);
+  openSheet(`<h3>${esc(p.name)}</h3><div class="subt">${p.sex==='w'?'weiblich':'männlich'}${p.geb?' · geb. '+fmtDate(p.geb):''}${u18?' · U18':''} · Durchgang: ${esc(S.dgs.find(d=>d.id===S.dg).name)}</div>
+    <div class="dl">${rows}</div>
+    ${hist.length?`<h2>Alle Ergebnisse</h2><ul class="hist">${hist.join('')}</ul>`:''}
+    <div class="actions" style="margin-top:12px"><button class="btn" id="pdEdit">Stammdaten bearbeiten</button><button class="btn" id="pdClose">Schließen</button></div>`);
+  sheet.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>entrySheet(pid,b.dataset.go,{back:true}));
+  sheet.querySelector('#pdEdit').onclick=()=>personSheet(pid);
+  sheet.querySelector('#pdClose').onclick=closeSheet;
+}
+
+function entrySheet(pid, id, opt={}){
+  const p = person(pid);
+  if(!p.sex){ toast('Für '+p.name+' fehlt das Geschlecht.'); personSheet(pid); return; }
+  const r = getRes(S.dg,pid,id), u = DISZ[id].u;
+  const date = r ? r.d : today();
+  const u18 = isU18(p, date);
+  const gw = GEW[p.sex][id];
+  const gewTxt = gw ? `Gerät: ${u18===null?gw[0]+' (U18: '+gw[1]+')':u18?gw[1]+' (U18)':gw[0]}` : '';
+  let m0='', s0='';
+  if(r){ if(u==='min'){ m0=Math.floor(r.w/60); s0=dec(r.w-m0*60, Math.abs(r.w*10-Math.round(r.w*10))<1e-6?1:2); } else s0 = u==='m'?dec(r.w,2):dec(r.w, Math.abs(r.w*10-Math.round(r.w*10))<1e-6?1:2); }
+  const input = u==='min'
+    ? `<div class="tin big"><input id="eMin" inputmode="numeric" placeholder="min" value="${m0}" aria-label="Minuten"><span>:</span><input id="eSec" inputmode="decimal" placeholder="s,z" value="${s0}" aria-label="Sekunden"></div>`
+    : `<div class="big"><input id="eVal" inputmode="decimal" placeholder="${u==='m'?'z. B. 5,23':'z. B. 13,5'}" value="${s0}" aria-label="Leistung"></div>`;
+  openSheet(`<h3>${esc(p.name)}</h3><div class="subt">${label(id,p.sex)} · ${u==='m'?'Meter':u==='min'?'Minuten : Sekunden':'Sekunden'}${gewTxt?' · '+gewTxt:''}</div>
+    <div class="chips" id="eDisz">${ORDER.filter(x=>S.aktiv.includes(x)).map(x=>`<button type="button" class="chip" data-d="${x}" aria-pressed="${x===id}">${DISZ[x].s}${getRes(S.dg,pid,x)?'<span class="dot"></span>':''}</button>`).join('')}</div>
+    <form id="ef">
+      <div class="field"><label>Leistung</label>${input}</div>
+      <div class="score" id="eScore"></div>
+      <div class="field"><label for="eDate">Datum</label><input id="eDate" type="date" value="${date}"></div>
+      <div class="actions">
+        <button class="btn primary" type="submit">Speichern</button>
+        <button class="btn" type="button" id="eNext">Speichern + nächste:r</button>
+        ${r?'<button class="btn danger" type="button" id="eDel">Löschen</button>':''}
+      </div>
+    </form>`);
+  const read = ()=> u==='min' ? (num(sheet.querySelector('#eMin').value||'0')*60 + num(sheet.querySelector('#eSec').value)) : num(sheet.querySelector('#eVal').value);
+  const upd = ()=>{
+    const w = read(), pts = punkte(p.sex,id,w);
+    const sc = sheet.querySelector('#eScore');
+    if(pts==null){ sc.innerHTML = `<div><small>Punkte</small><b>–</b></div><div class="u"><small>NP Unterricht</small><b>–</b></div><div><small>NP Abitur</small><b>–</b></div>`; return; }
+    const nu = np(pts,'U'), na = np(pts,'A');
+    sc.innerHTML = `<div><small>Punkte</small><b>${pts}</b></div><div class="u"><small>NP Unterricht</small><b>${nu}</b></div><div><small>NP Abitur</small><b>${na}</b></div>
+      <div class="band">Unterricht: ${BANDTXT[band(nu)]} · Abitur: ${BANDTXT[band(na)]}${pts>100?' · Überpunkte':''}${ESTIMATED_U.includes(nu)?' · Unterrichtsstufe geschätzt':''}</div>`;
+  };
+  sheet.querySelectorAll('input').forEach(i=>i.addEventListener('input',upd));
+  upd();
+  sheet.querySelectorAll('#eDisz [data-d]').forEach(b=>b.onclick=()=>entrySheet(pid,b.dataset.d,opt));
+  const commit = ()=>{
+    const w = read();
+    if(!(w>0)){ toast('Bitte eine Leistung eintragen, z. B. 13,5.'); return false; }
+    setRes(S.dg,pid,id,{w:Math.round(w*1000)/1000, d: sheet.querySelector('#eDate').value || today()});
+    save(); render(); return true;
+  };
+  sheet.querySelector('#ef').onsubmit = e=>{ e.preventDefault(); if(commit()){ toast('Gespeichert'); opt.back ? personDetail(pid) : closeSheet(); } };
+  sheet.querySelector('#eNext').onclick = ()=>{
+    if(!commit()) return;
+    const ps = sorted(), i = ps.findIndex(x=>x.id===pid), nx = ps[i+1];
+    if(nx){ toast('Gespeichert – weiter mit '+nx.name); entrySheet(nx.id,id,{}); } else { toast('Gespeichert – Liste durch'); closeSheet(); }
+  };
+  const del = sheet.querySelector('#eDel');
+  if(del) del.onclick = ()=>{ setRes(S.dg,pid,id,null); save(); render(); toast('Ergebnis gelöscht'); opt.back ? personDetail(pid) : closeSheet(); };
+  const f = sheet.querySelector(u==='min'?'#eMin':'#eVal'); f.focus(); f.select && f.select();
+}
+
+function diszSheet(){
+  const grp = g => ORDER.filter(id=>DISZ[id].g===g).map(id=>`<button type="button" class="chip" data-d="${id}" aria-pressed="${S.aktiv.includes(id)}">${label(id)}</button>`).join('');
+  openSheet(`<h3>Disziplinen</h3><div class="subt">Angetippte Disziplinen erscheinen als Spalten. Eingetragene Ergebnisse bleiben beim Abwählen erhalten.</div>
+    ${Object.entries(GROUPS).map(([g,n])=>`<h2>${n}</h2><div class="chips">${grp(g)}</div>`).join('')}
+    <div class="actions"><button class="btn primary" id="dOk">Fertig</button></div>`);
+  sheet.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.d, on = !S.aktiv.includes(id);
+    S.aktiv = on ? S.aktiv.concat(id) : S.aktiv.filter(x=>x!==id);
+    b.setAttribute('aria-pressed', on); save(false); render();
+  });
+  sheet.querySelector('#dOk').onclick = closeSheet;
+}
+
+function vkSheet(pid){
+  const p = person(pid), c = vkCandidates(p,S.dg), v = vkResult(p,S.dg);
+  if(c.length<4 || !v.ids){ openSheet(`<h3>${esc(p.name)}</h3><div class="subt">Für einen Vierkampf fehlen noch Ergebnisse${v.missing&&v.missing.length?': '+esc(v.missing.join(', ')):''}.</div><div class="actions"><button class="btn" id="x">Schließen</button></div>`); sheet.querySelector('#x').onclick=closeSheet; return; }
+  const cur = v.ids.slice();
+  const opts = (g, selId) => c.filter(x=>!g || DISZ[x.id].g===g).map(x=>`<option value="${x.id}"${x.id===selId?' selected':''}>${label(x.id,p.sex)} – ${x.pts} P</option>`).join('');
+  openSheet(`<h3>${esc(p.name)} · Vierkampf</h3><div class="subt">Durchgang: ${esc(S.dgs.find(d=>d.id===S.dg).name)}</div>
+    <div class="field"><label for="s0">Mittel-/Langstrecke</label><select id="s0">${opts('ml',cur[0])}</select></div>
+    <div class="field"><label for="s1">Sprung</label><select id="s1">${opts('sprung',cur[1])}</select></div>
+    <div class="field"><label for="s2">Wurf/Stoß</label><select id="s2">${opts('wurf',cur[2])}</select></div>
+    <div class="field"><label for="s3">Frei wählbar</label><select id="s3">${opts(null,cur[3])}</select></div>
+    <div class="score" id="vScore"></div>
+    <div class="actions"><button class="btn primary" id="vOk">Übernehmen</button><button class="btn" id="vAuto">Beste Kombination</button></div>`);
+  const sel = ()=>[0,1,2,3].map(i=>sheet.querySelector('#s'+i).value);
+  const upd = ()=>{
+    const ids = sel(), ok = vkValid(ids), sc = sheet.querySelector('#vScore');
+    if(!ok){ sc.innerHTML = `<div class="band" style="color:var(--signal)">Ungültig: jede Disziplin nur einmal, höchstens zwei aus derselben Pflichtgruppe.</div>`; return false; }
+    const sum = ids.reduce((s,id)=>s+c.find(x=>x.id===id).pts,0);
+    sc.innerHTML = `<div><small>Summe</small><b>${sum}</b></div><div class="u"><small>NP Unterricht</small><b>${np(sum/4,'U')}</b></div><div><small>NP Abitur</small><b>${np(sum/4,'A')}</b></div>`;
+    return true;
+  };
+  sheet.querySelectorAll('select').forEach(s=>s.onchange=upd); upd();
+  sheet.querySelector('#vOk').onclick = ()=>{ if(!upd()) return; S.vk[S.dg]=S.vk[S.dg]||{}; S.vk[S.dg][pid]=sel(); save(); render(); closeSheet(); toast('Vierkampf gespeichert'); };
+  sheet.querySelector('#vAuto').onclick = ()=>{ if(S.vk[S.dg]) delete S.vk[S.dg][pid]; save(); render(); vkSheet(pid); };
+}
+
+function dgSheet(did){
+  const d = did ? S.dgs.find(x=>x.id===did) : {name:''};
+  openSheet(`<h3>${did?'Durchgang umbenennen':'Neuer Durchgang'}</h3><div class="subt">z. B. „Leistungsüberprüfung P8“ oder „Vierkampf Abi-Probe“</div>
+    <form id="df"><div class="field"><label for="dName">Name</label><input id="dName" required value="${esc(d.name)}"></div>
+    <div class="actions"><button class="btn primary" type="submit">Speichern</button></div></form>`);
+  sheet.querySelector('#df').onsubmit = e=>{
+    e.preventDefault(); const name = sheet.querySelector('#dName').value.trim(); if(!name) return;
+    if(did) d.name = name; else { const id=uid(); S.dgs.push({id,name}); S.dg=id; }
+    save(); render(); closeSheet(); toast(did?'Umbenannt':'Durchgang angelegt und aktiv');
+  };
+  sheet.querySelector('#dName').focus();
+}
+
+/* ===== Import / Export ===== */
+function importLines(text){
+  let n=0, skip=[];
+  text.split(/\r?\n/).forEach((line,i)=>{
+    if(!line.trim()) return;
+    const sep = line.includes('\t') ? '\t' : line.includes(';') ? ';' : ',';
+    const f = line.split(sep).map(x=>x.replace(/^"|"$/g,'').trim());
+    const name = f[0]; if(!name || /^name$/i.test(name)) return;
+    const geb = parseDate(f[1]), sex = parseSex(f[2]||f[1]);
+    if(S.personen.some(p=>p.name.toLowerCase()===name.toLowerCase())){ skip.push(name); return; }
+    S.personen.push({id:uid(), name, geb, sex}); n++;
+  });
+  save(); render();
+  toast(n+' übernommen'+(skip.length?', '+skip.length+' schon vorhanden':''));
+  const miss = S.personen.filter(p=>!p.sex).length;
+  if(miss) setTimeout(()=>toast(miss+' Person(en) ohne Geschlecht – bitte unter Daten ergänzen'),2800);
+}
+async function saveFile(name, text, mime){
+  const blob = new Blob([text], {type:mime});
+  try{
+    const file = new File([blob], name, {type:mime});
+    if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:name}); return true; }
+  }catch(e){ if(e && e.name==='AbortError') return false; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  return true;
+}
+function stamp(){ return today(); }
+async function doBackup(){
+  const ok = await saveFile(`LA-Punkte_Sicherung_${stamp()}.json`, JSON.stringify(S,null,1), 'application/json');
+  if(ok){ S.lastBackup = Date.now(); S.changedSinceBackup = false; save(false); render(); toast('Sicherung erstellt'); }
+}
+function csvCell(v){ v = v==null?'':String(v); return /[;"\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function doCSV(){
+  const cols = ORDER.filter(id=>S.aktiv.includes(id) || S.personen.some(p=>getRes(S.dg,p.id,id)));
+  const head = ['Name','Geburtsdatum','Geschlecht','U18'];
+  cols.forEach(id=>head.push(DISZ[id].l||DISZ[id].s, 'Punkte', 'NP Unterricht', 'NP Abitur', 'Datum'));
+  head.push('Vierkampf Disziplinen','Vierkampf Summe','Vierkampf NP Unterricht','Vierkampf NP Abitur');
+  const rows = [head];
+  sorted().forEach(p=>{
+    const row = [p.name, fmtDate(p.geb), p.sex, isU18(p)?'ja':'nein'];
+    cols.forEach(id=>{ const r=getRes(S.dg,p.id,id), e=evalRes(p,id,r); row.push(r?fmtW(id,r.w):'', e?e.pts:'', e?e.u:'', e?e.a:'', r?fmtDate(r.d):''); });
+    const v = vkResult(p,S.dg);
+    row.push(v.ids?v.ids.map(id=>DISZ[id].s).join(' / '):'', v.ids?v.sum:'', v.ids?v.u:'', v.ids?v.a:'');
+    rows.push(row);
+  });
+  const dgName = S.dgs.find(d=>d.id===S.dg).name.replace(/[^\wäöüÄÖÜß-]+/g,'_');
+  saveFile(`LA-Punkte_${dgName}_${stamp()}.csv`, '﻿'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n'), 'text/csv');
+}
+function doPrint(){
+  const cols = ORDER.filter(id=>S.aktiv.includes(id));
+  const dg = S.dgs.find(d=>d.id===S.dg).name;
+  let h = `<h1>LK Sport – Leichtathletik: ${esc(dg)}</h1><div>Stand ${fmtDate(today())} · Punkte nach EPA · NP U = Unterricht, NP A = Abitur</div>
+    <table><thead><tr><th>Name</th>${cols.map(id=>`<th>${DISZ[id].s}<br>Leistung · P · U · A</th>`).join('')}</tr></thead><tbody>`;
+  sorted().forEach(p=>{
+    h += `<tr><td>${esc(p.name)}${isU18(p)?' (U18)':''}</td>` + cols.map(id=>{ const r=getRes(S.dg,p.id,id), e=evalRes(p,id,r); return `<td>${r?fmtW(id,r.w)+' · '+e.pts+' · '+e.u+' · '+e.a:''}</td>`; }).join('') + '</tr>';
+  });
+  h += `</tbody></table><h1>Vierkampf</h1><table><thead><tr><th>Name</th><th>Disziplinen (Punkte)</th><th>Summe</th><th>NP U</th><th>NP A</th></tr></thead><tbody>`;
+  sorted().forEach(p=>{ const v=vkResult(p,S.dg); h += `<tr><td>${esc(p.name)}</td><td>${v.ids?v.parts.map(x=>DISZ[x.id].s+' '+x.pts).join(' · '):'fehlt: '+esc(v.missing.join(', '))}</td><td>${v.ids?v.sum:''}</td><td>${v.ids?v.u:''}</td><td>${v.ids?v.a:''}</td></tr>`; });
+  document.getElementById('print').innerHTML = h + '</tbody></table>';
+  window.print();
+}
+function doRestore(file){
+  const fr = new FileReader();
+  fr.onload = ()=>{
+    try{
+      const d = JSON.parse(fr.result);
+      if(!d || !Array.isArray(d.personen) || !d.res) throw 0;
+      if(!confirm(`Sicherung mit ${d.personen.length} Personen laden? Die aktuellen Daten auf diesem Gerät werden ersetzt.`)) return;
+      S = d; save(false); load(); render(); toast('Sicherung geladen');
+    }catch(e){ toast('Die Datei ist keine gültige LA-Punkte-Sicherung.'); }
+  };
+  fr.readAsText(file);
+}
+
+/* ===== Events ===== */
+document.addEventListener('click', e=>{
+  const t = e.target.closest('button'); if(!t) return;
+  if(t.dataset.view){
+    document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current', b===t));
+    document.querySelectorAll('.view').forEach(v=>v.hidden = v.id !== 'v-'+t.dataset.view);
+    window.scrollTo(0,0); return;
+  }
+  if(t.dataset.p && t.dataset.d) return entrySheet(t.dataset.p, t.dataset.d);
+  if(t.dataset.person) return personDetail(t.dataset.person);
+  if(t.dataset.vk) return vkSheet(t.dataset.vk);
+  if(t.dataset.edit) return personSheet(t.dataset.edit);
+  if(t.dataset.dgedit) return dgSheet(t.dataset.dgedit);
+  if(t.dataset.dgdel){
+    const d = S.dgs.find(x=>x.id===t.dataset.dgdel);
+    if(!confirm(`Durchgang „${d.name}“ mit allen Ergebnissen löschen?`)) return;
+    S.dgs = S.dgs.filter(x=>x!==d); delete S.res[d.id]; delete S.vk[d.id];
+    if(S.dg===d.id) S.dg = S.dgs[0].id; save(); render(); return;
+  }
+  switch(t.dataset.act){
+    case 'addPerson': return personSheet(null);
+    case 'pickDisz': return diszSheet();
+    case 'backup': return doBackup();
+    case 'restore': return document.getElementById('restoreFile').click();
+    case 'csv': return doCSV();
+    case 'print': return doPrint();
+    case 'addDg': return dgSheet(null);
+    case 'importText': { const ta=document.getElementById('importText'); if(ta.value.trim()){ importLines(ta.value); ta.value=''; } else toast('Erst eine Liste einfügen.'); return; }
+    case 'importFile': return document.getElementById('importFile').click();
+  }
+});
+document.getElementById('dgSel').onchange = e=>{ S.dg = e.target.value; save(false); render(); };
+document.getElementById('restoreFile').onchange = e=>{ if(e.target.files[0]) doRestore(e.target.files[0]); e.target.value=''; };
+document.getElementById('importFile').onchange = e=>{ const f=e.target.files[0]; if(!f) return; const fr=new FileReader(); fr.onload=()=>importLines(fr.result); fr.readAsText(f); e.target.value=''; };
+
+load(); render();
+if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
